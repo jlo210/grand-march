@@ -1,0 +1,357 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Grand March — Animation</title>
+<style>
+  :root{
+    --paper:#F6F2E9; --ink:#293a35; --sage:#7e9a90; --sage-deep:#3f564e;
+    --coral:#d8592e; --plum:#7f77dd; --hair:rgba(41,58,53,.16);
+    --sans:'Inter',system-ui,-apple-system,sans-serif;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:#e7e2d6;color:var(--ink);font-family:var(--sans);padding:18px;-webkit-font-smoothing:antialiased}
+  .wrap{max-width:1080px;margin:0 auto;background:var(--paper);border-radius:12px;
+    box-shadow:0 8px 34px rgba(0,0,0,.16);padding:18px 20px 20px}
+  .head{display:flex;justify-content:space-between;align-items:flex-end;flex-wrap:wrap;gap:8px;
+    border-bottom:1.5px solid var(--sage-deep);padding-bottom:9px;margin-bottom:10px}
+  h1{font-size:21px;color:var(--sage-deep);letter-spacing:-.01em}
+  h1 small{display:block;font-weight:500;font-size:10.5px;letter-spacing:.16em;text-transform:uppercase;color:var(--coral);margin-bottom:3px}
+  .now{text-align:right}
+  .now .fig{font-size:16px;font-weight:600;color:var(--ink)}
+  .now .fig b{color:var(--coral)}
+  .now .room{font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--sage)}
+  .now .clk{font-variant-numeric:tabular-nums;font-size:12px;color:var(--sage-deep);margin-top:2px}
+  .stage{position:relative;width:100%;text-align:center}
+  canvas{display:block;margin:0 auto;border-radius:8px}
+  .controls{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:12px}
+  button{font-family:var(--sans);font-size:12.5px;font-weight:500;color:var(--sage-deep);
+    background:#fff;border:1px solid var(--hair);border-radius:7px;padding:7px 12px;cursor:pointer}
+  button:hover{border-color:var(--sage)}
+  button.primary{background:var(--sage-deep);color:#f3efe5;border-color:var(--sage-deep)}
+  .scrub{flex:1;min-width:160px;accent-color:var(--coral)}
+  .seg{display:flex;border:1px solid var(--hair);border-radius:7px;overflow:hidden}
+  .seg button{border:none;border-radius:0;border-right:1px solid var(--hair)}
+  .seg button:last-child{border-right:none}
+  .seg button.on{background:var(--coral);color:#fff}
+  .legend{display:flex;gap:16px;flex-wrap:wrap;margin-top:10px;font-size:11.5px;color:var(--sage-deep)}
+  .legend span{display:inline-flex;align-items:center;gap:6px}
+  .dot{width:11px;height:11px;border-radius:50%}
+  .note{font-size:11px;color:var(--sage);margin-top:9px;line-height:1.4}
+  @media(max-width:640px){.now{text-align:left}.head{align-items:flex-start}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="head">
+    <h1><small>Sophia &amp; Isaac · led by Julie &amp; Chris</small>The Grand March</h1>
+    <div class="now">
+      <div class="fig"><b id="figNum">1.</b> <span id="figName">Line up</span></div>
+      <div class="room" id="figRoom">Terrace</div>
+      <div class="clk" id="clk">march time 0:00 / 8:30</div>
+    </div>
+  </div>
+
+  <div class="stage"><canvas id="cv"></canvas></div>
+
+  <div class="controls">
+    <button class="primary" id="play">▶ Play</button>
+    <button id="restart">↺ Restart</button>
+    <button id="prev">‹ Figure</button>
+    <button id="next">Figure ›</button>
+    <input type="range" class="scrub" id="scrub" min="0" max="1000" value="0">
+    <div class="seg" id="speed">
+      <button data-mode="comp" class="on">Compressed</button>
+      <button data-mode="real">Real-time</button>
+    </div>
+    <div class="seg" id="crowd">
+      <button data-m="real" class="on">Realistic ~120</button>
+      <button data-m="leg">Legible ~80</button>
+    </div>
+  </div>
+
+  <div class="legend">
+    <span><i class="dot" style="background:#d8592e"></i> You &amp; Chris (lead)</span>
+    <span><i class="dot" style="background:#7f77dd"></i> Sophia &amp; Isaac</span>
+    <span><i class="dot" style="background:#8aa296"></i> Guests</span>
+  </div>
+  <div class="note">To scale: the Ballroom stands upright (41 ft &times; 100 ft) with the 14&ndash;17 corner cleared; the Terrace docks against that cleared end, sharing one wall with a door where table 14 sat. Six figures, alternating rooms: <b>1</b> line up along the Terrace walls, <b>2</b> promenade &amp; gather in the Ballroom (small steps, let the files bunch until the Terrace clears), <b>3</b> separate &amp; rejoin in the Terrace (leads and follows serpentine in opposite columns, then re-pair), <b>4</b> promenade back &amp; gather again, <b>5</b> the Arbor March (couples freeze into an oval of arches, then dissolve from the rear and walk the tunnel out), <b>6</b> spiral into the rings and seat Sophia &amp; Isaac at the centre. <b>Realistic</b> is ~120 people at ~3 ft spacing; <b>Legible</b> is a looser ~80. Scrub the bar or step figure by figure.</div>
+</div>
+
+<script>
+(function(){
+const cv=document.getElementById('cv'), ctx=cv.getContext('2d');
+
+// ---------- world (feet): Ballroom upright, Terrace docked at its cleared end ----------
+const WORLD={w:88,h:100};
+const ROOMS={ ball:{x:0,y:0,w:41,h:100}, terr:{x:41,y:0,w:47,h:36} };
+const DOOR={x:41,y0:25,y1:32,cy:28.5};
+const STAGE={x:2,y:2,w:37,h:12};
+const CLEAR={x:2,y:15,w:37,h:25};
+const TABLES=[];
+[10,20,30].forEach(x=>TABLES.push([x,47]));
+[10,20,30].forEach(x=>TABLES.push([x,59]));
+[7,17,26,35].forEach(x=>TABLES.push([x,71]));
+[10,20,30].forEach(x=>TABLES.push([x,83]));
+const FCENTER=[20,28];
+
+// ---------- path helper ----------
+function P(pts){const cum=[0];let len=0;for(let i=1;i<pts.length;i++){const dx=pts[i][0]-pts[i-1][0],dy=pts[i][1]-pts[i-1][1];len+=Math.hypot(dx,dy);cum.push(len);}return{pts,cum,len,at(s){s=Math.max(0,Math.min(len,s));let i=1;while(i<cum.length&&cum[i]<s)i++;if(i>=pts.length)i=pts.length-1;const t=(s-cum[i-1])/((cum[i]-cum[i-1])||1);const x=pts[i-1][0]+(pts[i][0]-pts[i-1][0])*t,y=pts[i-1][1]+(pts[i][1]-pts[i-1][1])*t,dx=pts[i][0]-pts[i-1][0],dy=pts[i][1]-pts[i-1][1],m=Math.hypot(dx,dy)||1;return{x,y,tx:dx/m,ty:dy/m};}};}
+function offset(pt,side,half){return {x:pt.x+side*half*(-pt.ty),y:pt.y+side*half*(pt.tx)};}
+
+// ========== ROUTE A : figures 1-4 as one continuous train ==========
+// 1 line-up (Terrace walls) -> 2 gather (Ballroom) -> 3 separate/rejoin (Terrace) -> 4 promenade (Ballroom)
+const queue =P([[85,33],[85,4],[43,4],[43,28],[44,29]]);   // line-up: tail at bottom-right, up the right wall, across the top, down the shared wall to the door (lead)
+const gather=P([[44,29],[38,29],[34,22],[33,18],[4,18],[4,24],[33,24],[33,30],[4,30],[4,36],[33,36],[38,30],[44,29]]); // enters the ballroom AT door height, then climbs to four rows; exit drops back to door height before the door
+const splitL=P([[44,29],[49,18],[80,18],[80,16],[48,16],[48,12],[80,12],[80,8],[48,8],[48,4],[80,4],[84,4],[84,18]]);   // leads: split, immediate u-turn into row 4, serpentine OUT 3-2-1 to the top wall, rejoin right
+const splitR=P([[44,29],[49,18],[80,18],[80,20],[48,20],[48,24],[80,24],[80,28],[48,28],[48,32],[80,32],[84,32],[84,18]]); // follows: mirror, row 5 then 6-7-8 to the bottom wall (even 4 ft pitch across all eight)
+const lap   =P([[84,18],[50,18],[44,29],[38,29],[34,22],[33,18],[4,18],[4,24],[33,24],[33,30],[4,30],[4,36],[33,36],[38,30],[44,29]]); // figure 4: from the right rejoin, march left across the Terrace to the door, then the SAME four-row column march as figure 2
+const Lq=queue.len,Lg=gather.len,Ls=splitL.len,Ll=lap.len;
+const LA=Lq+Lg+Ls+Ll;
+const HALF=1.25;
+const SPLITARC=splitL.cum[2];   // arc at [80,18], the moment couples split into singles
+function walkA(gd,side){gd=Math.max(0,Math.min(LA,gd));
+  if(gd<=Lq) return offset(queue.at(gd),side,HALF*0.8);
+  if(gd<=Lq+Lg) return offset(gather.at(gd-Lq),side,HALF);
+  if(gd<=Lq+Lg+Ls){const arc=gd-Lq-Lg, sp=(side<0?splitL:splitR);
+    return offset(sp.at(arc), side, arc<SPLITARC?HALF:0);}   // 2-abreast entering, single file through the serpentine, re-pair at the rejoin
+  return offset(lap.at(gd-Lq-Lg-Ls),side,HALF);
+}
+
+// ========== ARBOR (figure 5) : per-couple state machine ==========
+const O=[64,18], ORX=20, ORY=13, ARCH=1.7, AGAP=0.55, TH0=Math.PI;
+function ovalPt(a,ro){return {x:O[0]+(ORX+ro)*Math.cos(a), y:O[1]+(ORY+ro)*Math.sin(a)};}
+// Feed overlays figure 4's lap, reversed from the door, so couples begin figure 5 exactly where figure 4 left them.
+const arborIn =P([[44,18],[44,29],[38,30],[33,36],[4,36],[4,30],[33,30],[33,24],[4,24],[4,18],[33,18],[34,22],[38,29],[44,29]]);
+const arborOut=P([[44,18],[44,25],[44,29],[40,29],[37,28],[35,28]]);   // exit -> door -> spiral mouth
+const DOORARC=arborIn.cum[1];                                          // arc at [44,29]: the door / figure-4 lap end
+// Build front and collapse front are two overlapping sweeps. The first couple
+// releases once QREL/QBUILD of the arbor is frozen (~60%), then walks the tunnel
+// while couples are still arriving and freezing at the far end -> a moving band.
+const QBUILD=0.60, QREL=0.36;
+function arbor(g,d){                                      // figures 5 AND 6: build, collapse, and coil are one continuous flow keyed to global g
+  const N=RANKS, dth=(2*Math.PI-AGAP)/N, i=d.r;
+  const io = d.side<0? -ARCH : ARCH;
+  const p=Math.min(1,(g-gA_end)/(gAr_end-gA_end));        // build progress (clamped: fully built once figure 5 ends)
+  const sp=Math.min(GAP,(Ls-SPLITARC)/(RANKS+4));         // feed pack == figure 4 lap pack
+  const Fz0=(DOORARC/sp+1)/2;                             // the door->mouth approach, measured in couple-slots
+  const Fzr=(p/QBUILD)*(N+Fz0)-Fz0;                       // build front: starts out at the door (negative), so the train marches in at one pace
+  const Fz=Math.max(0,Math.min(N,Fzr));                   // couples 0..Fz-1 are frozen arches
+  const VEXIT=GAP/dth;                                    // tail speed: gives GAP single-file spacing on the coil
+  const Afull=((2*Math.PI-AGAP)-dth)+Ltail/VEXIT;         // collapse advance at which couple 0 reaches centre and the coil is fully formed
+  const A=Math.max(0,(g-gColl)/(gSp_end-gColl))*Afull;    // collapse spans figure 5 tail + figure 6, so the spiral coils while the rear is still in the tunnel
+  if(i<Fz){                                                // this couple has frozen into an arch
+    const exitTh=(2*Math.PI-AGAP)+(i-1)*dth;
+    if(A>=exitTh){ const over=A-exitTh;                    // out the gap, single file: door -> coil -> centre (figure 6 is this same flow continuing)
+      const arc=over*VEXIT-(d.side>0?GAP*0.5:0); const pt=tail.at(Math.max(0,Math.min(Ltail,arc))); return {x:pt.x,y:pt.y}; }
+    if(A>=2*i*dth){ const ang=TH0+A+(1-i)*dth, sa=d.side>0?ang-0.045:ang; return ovalPt(sa,0); } // walking the tunnel
+    return ovalPt(TH0+(i+1)*dth, io);                      // standing arch, awaiting its turn
+  }
+  let ang=TH0+(2*Fzr-i+1)*dth;                             // marching: one continuous pace from the door, through the mouth, onto the oval
+  if(ang>=TH0){ const sa=d.side>0?ang-0.045:ang; return ovalPt(sa,0); }  // single file on the oval
+  const back=(TH0-ang)/dth;
+  return offset(arborIn.at(Math.min(arborIn.len,back*sp)),-d.side,HALF);  // queued along figure 4's lap, back into the Ballroom
+}
+
+// ========== SPIRAL + RINGS (figure 6) ==========
+const C=FCENTER, spts=[[44,29],[39,29],[36,28],[35,28]];
+for(let k=0;k<=240;k++){const f=k/240,a=-f*4.3*2*Math.PI,rx=15-f*13.4,ry=10.5-f*9.0;spts.push([C[0]+rx*Math.cos(a),C[1]+ry*Math.sin(a)]);}
+const spiral=P(spts); const Lsp=spiral.len;
+// the arbor exit and the spiral coil are ONE path: couples leave the oval at the gap, drop to the door, and coil to the centre with no seam
+const GAPANG=TH0+(2*Math.PI-AGAP);                         // the angle where every couple's tunnel sweep ends
+const tail=P([[O[0]+ORX*Math.cos(GAPANG),O[1]+ORY*Math.sin(GAPANG)]].concat(spts));
+const Ltail=tail.len;
+function resolveT(p,d){
+  const RX=15,RY=10.5, SPAN=0.45, DUR=0.55;                // SPAN: stagger between turns; DUR: how long one turn takes to round (DUR>SPAN -> turns overlap = continuous wave)
+  const delay = d.maxB>0 ? (d.maxB-d.band)/d.maxB*SPAN : 0; // innermost turn (band==maxB) closes first, then outward
+  let lc=(p-delay)/DUR; lc=Math.max(0,Math.min(1,lc)); lc=lc*lc*(3-2*lc);
+  const sx=C[0]+RX*d._rho0*Math.cos(d._phi0), sy=C[1]+RY*d._rho0*Math.sin(d._phi0);   // its spot on the coil
+  if(d.kind==='bg'){                                        // Sophia & Isaac settle to the centre and keep slowly turning
+    const bx=C[0]+0.7*d.side*Math.cos(spin), by=C[1]+0.7*d.side*Math.sin(spin);
+    return {x:sx+(bx-sx)*lc, y:sy+(by-sy)*lc};
+  }
+  const L=d._rho0+(d.ringL-d._rho0)*lc;                    // radius flattens to its turn's radius (inside-out wave)...
+  let dd=d.tang-d._phi0; while(dd>Math.PI)dd-=2*Math.PI; while(dd<-Math.PI)dd+=2*Math.PI;
+  const ang=(d._phi0 + dd*lc) - spin;                      // ...nudging the sparse rings toward even spacing as they close, while the whole formation keeps revolving
+  return {x:C[0]+RX*L*Math.cos(ang), y:C[1]+RY*L*Math.sin(ang)};
+}
+
+// ---------- dots ----------
+let RANKS=60, GAP=3.0, crowdRad=1.8, hiRad=2.9;
+const dots=[];
+function assignFinaleRings(){
+  const RX=15,RY=10.5, MINRING=4;
+  // where every dot sits at the end of the coil (exactly where figure 6 leaves it)
+  dots.forEach(d=>{const arc=Lsp-d.r*GAP-(d.side>0?GAP*0.5:0);const b=spiral.at(Math.max(0,arc));
+    const u=(b.x-C[0])/RX,v=(b.y-C[1])/RY;d._rho0=Math.hypot(u,v);d._phi0=Math.atan2(v,u);});
+  // one angle per couple, unwound from the outermost inward, to cut a ring at every full turn. rank 1 (Sophia & Isaac) is left out: they hold the centre
+  const cps=[]; for(let r=0;r<RANKS;r++){ if(r===1) continue; const b=spiral.at(Math.max(0,Lsp-r*GAP));
+    cps.push({r,phi:Math.atan2((b.y-C[1])/RY,(b.x-C[0])/RX),rho:Math.hypot((b.x-C[0])/RX,(b.y-C[1])/RY)});}
+  cps.sort((a,b)=>b.r-a.r); let wnd=0; cps[0].w=0;
+  for(let i=1;i<cps.length;i++){let dd=cps[i].phi-cps[i-1].phi;while(dd>Math.PI)dd-=2*Math.PI;while(dd<-Math.PI)dd+=2*Math.PI;wnd+=dd;cps[i].w=wnd;}
+  let nB=Math.max(1,Math.ceil(Math.abs(cps[cps.length-1].w)/(2*Math.PI)));     // a ring per full turn of the spiral
+  cps.forEach(c=>c.band=Math.min(nB-1,Math.floor(Math.abs(c.w)/(2*Math.PI))));
+  const count=()=>{const a=new Array(nB).fill(0);cps.forEach(c=>a[c.band]++);return a;};
+  while(nB>1 && count()[nB-1]<MINRING){cps.forEach(c=>{if(c.band===nB-1)c.band=nB-2;});nB--;}   // fold the sparse centre turn in, so the lead couple (rank 0) joins a populated innermost ring
+  const cnts=count(), sumR=new Array(nB).fill(0);
+  cps.forEach(c=>sumR[c.band]+=c.rho); const bandRho=sumR.map((s,b)=>cnts[b]?s/cnts[b]:0.14);    // each ring sits at its turn's mean radius
+  // gentle nudge toward even spacing on the SPARSE inner rings only (dense outer rings keep their own spiral angle)
+  const tShift={};
+  for(let b=0;b<nB;b++){ const g=cps.filter(c=>c.band===b);
+    const amt=Math.max(0,Math.min(1,(14-g.length)/8))*0.85;                    // tidy only the sparse inner rings: inner(~6)~0.85, next(~12) gentle, denser rings 0 (both crowd modes stay crossing-free)
+    if(g.length<2||amt<=0){ g.forEach(c=>tShift[c.r]=0); continue; }
+    g.sort((a,b2)=>Math.abs(a.w)-Math.abs(b2.w)); const n=g.length;
+    let sa=0,ca=0; g.forEach((c,j)=>{const slot=-j*2*Math.PI/n;sa+=Math.sin(c.phi-slot);ca+=Math.cos(c.phi-slot);});
+    const Rrot=Math.atan2(sa,ca);                                              // best rotation fitting evenly-spaced slots to the couples (stable, order preserving -> no crossing)
+    g.forEach((c,j)=>{let del=(Rrot-j*2*Math.PI/n)-c.phi;while(del>Math.PI)del-=2*Math.PI;while(del<-Math.PI)del+=2*Math.PI;tShift[c.r]=del*amt;});
+  }
+  const tBy={}; cps.forEach(c=>tBy[c.r]={band:c.band,L:bandRho[c.band],t:tShift[c.r]});
+  dots.forEach(d=>{ d.maxB=nB-1;
+    if(d.kind==='bg'){ d.band=nB-1; d.ringL=0; d.tang=d._phi0; return; }       // Sophia & Isaac: dead centre
+    const m=tBy[d.r]; d.band=m.band; d.ringL=m.L; d.tang=d._phi0+m.t; });      // tang = tidied target angle (equals the coil angle on the dense rings)
+}
+function buildCrowd(){dots.length=0;
+  for(let r=0;r<RANKS;r++)for(const side of [-1,1]){
+    let kind='crowd'; if(r===0)kind='lead'; else if(r===1)kind='bg';
+    dots.push({r,side,kind,x:60,y:20});
+  }
+  assignFinaleRings();
+}
+
+// ---------- phases ----------
+const PHASES=[
+  {fig:2,n:'Promenade & gather',room:'Ballroom',w:Math.round(Lg)},
+  {fig:3,n:'Separate & rejoin',room:'Terrace',w:Math.round(Ls)},
+  {fig:4,n:'Promenade & gather',room:'Ballroom',w:Math.round(Ll)},
+  {fig:5,n:'Arbor March',room:'Terrace',w:330},
+  {fig:6,n:'Spiral',room:'Ballroom',w:Math.round(Lsp)},
+  {fig:6,n:'Resolve into rings',room:'Ballroom',w:110},
+];
+const totW=PHASES.reduce((a,p)=>a+p.w,0);
+let acc=0; PHASES.forEach(p=>{p.g0=acc/totW;acc+=p.w;p.g1=acc/totW;});
+const gA_end=PHASES[2].g1, gAr_end=PHASES[3].g1, gSp_end=PHASES[4].g1;
+const gColl=gA_end+QREL*(gAr_end-gA_end);                  // collapse begins ~QREL into figure 5 and runs through the end of figure 6
+function phaseAt(g){for(let i=0;i<PHASES.length;i++){if(g<=PHASES[i].g1||i===PHASES.length-1)return{i,p:(g-PHASES[i].g0)/(PHASES[i].g1-PHASES[i].g0)};}}
+
+buildCrowd();
+
+// ---------- position for a dot at the global timeline g ----------
+function rankArcA(r,DwA){                                    // walk back from the lead using each segment's own spacing
+  let a=DwA; const spLU=Math.min(GAP,Lq/(RANKS+0.5));        // line-up packs along the walls
+  const bunch=Math.min(GAP*0.83,Math.max(1.6,(Lg-42)/RANKS));// gather bunches just enough to fit every couple in the four rows
+  const spSerp=Math.min(GAP,(Ls-SPLITARC)/(RANKS+4));        // singles pack tight so the rear clears the centre lane before figure 4 marches across it
+  for(let k=0;k<r;k++){
+    let gap;
+    if(a>Lq+Lg+Ls) gap=spSerp;                               // on the lap: same tight pack, so the Terrace empties before figure 5 begins there
+    else if(a>Lq+Lg+SPLITARC) gap=spSerp;                    // serpentine, single file
+    else if(a>Lq+Lg) gap=GAP;                                // split entry, couples 2-abreast
+    else if(a>Lq) gap=bunch;                                 // gather, bunched
+    else gap=spLU;                                           // line-up, packed
+    a-=gap; if(a<=0){a=0;break;}
+  }
+  return a;
+}
+function posFor(g,d,now){
+  if(g<=0) return walkA(rankArcA(d.r,Lq),d.side);           // figure 1: couples packed along the three Terrace walls, lead at the door
+  if(g<=gA_end){ const Dw=Lq+(g/gA_end)*(LA-Lq); return walkA(rankArcA(d.r,Dw),d.side); }
+  if(g<=gSp_end) return arbor(g,d);                         // figures 5 AND 6: one continuous build -> collapse -> coil
+  return resolveT((g-gSp_end)/(1-gSp_end),d);
+}
+
+// ---------- view ----------
+let scale=1, ox=0, oy=0, dpr=1;
+function resize(){
+  const cssW=cv.parentElement.clientWidth, pad=12;
+  const maxH=Math.min(680, window.innerHeight*0.74);
+  scale=Math.min((cssW-2*pad)/WORLD.w,(maxH-2*pad)/WORLD.h);
+  const cw=WORLD.w*scale+2*pad, ch=WORLD.h*scale+2*pad;
+  dpr=window.devicePixelRatio||1;
+  cv.width=cw*dpr; cv.height=ch*dpr; cv.style.width=cw+'px'; cv.style.height=ch+'px';
+  ox=pad; oy=pad;
+}
+function TX(x){return (ox+x*scale)*dpr;}
+function TY(y){return (oy+y*scale)*dpr;}
+function TS(v){return v*scale*dpr;}
+function rr(x,y,w,h,r){ctx.beginPath();ctx.moveTo(x+r,y);ctx.arcTo(x+w,y,x+w,y+h,r);ctx.arcTo(x+w,y+h,x,y+h,r);ctx.arcTo(x,y+h,x,y,r);ctx.arcTo(x,y,x+w,y,r);ctx.closePath();}
+function roomRect(rm){ctx.fillStyle='#efeadd';ctx.strokeStyle='#9bafa6';ctx.lineWidth=1.4*dpr;rr(TX(rm.x),TY(rm.y),TS(rm.w),TS(rm.h),8*dpr);ctx.fill();ctx.stroke();}
+function drawBg(){
+  ctx.fillStyle='#F6F2E9';ctx.fillRect(0,0,cv.width,cv.height);
+  roomRect(ROOMS.ball); roomRect(ROOMS.terr);
+  ctx.fillStyle='#efeadd';ctx.fillRect(TX(DOOR.x)-2*dpr,TY(DOOR.y0),4*dpr,TS(DOOR.y1-DOOR.y0));
+  ctx.strokeStyle='#9bafa6';ctx.lineWidth=1.3*dpr;
+  ctx.beginPath();ctx.moveTo(TX(DOOR.x)-3*dpr,TY(DOOR.y0));ctx.lineTo(TX(DOOR.x)+3*dpr,TY(DOOR.y0));
+  ctx.moveTo(TX(DOOR.x)-3*dpr,TY(DOOR.y1));ctx.lineTo(TX(DOOR.x)+3*dpr,TY(DOOR.y1));ctx.stroke();
+  ctx.strokeStyle='rgba(216,89,46,.35)';ctx.setLineDash([4*dpr,4*dpr]);ctx.lineWidth=1*dpr;
+  rr(TX(CLEAR.x),TY(CLEAR.y),TS(CLEAR.w),TS(CLEAR.h),4*dpr);ctx.stroke();ctx.setLineDash([]);
+  ctx.fillStyle='#e2dccc';ctx.strokeStyle='#c5bca6';ctx.lineWidth=1*dpr;
+  rr(TX(STAGE.x),TY(STAGE.y),TS(STAGE.w),TS(STAGE.h),3*dpr);ctx.fill();ctx.stroke();
+  ctx.fillStyle='#dfd8c6';ctx.strokeStyle='#c5bca6';
+  TABLES.forEach(t=>{ctx.beginPath();ctx.arc(TX(t[0]),TY(t[1]),TS(3),0,6.2832);ctx.fill();ctx.stroke();});
+  ctx.fillStyle='#8a9b91';ctx.textAlign='center';ctx.font=(11*dpr)+'px Inter,sans-serif';
+  ctx.fillText('stage / band',TX(20),TY(9));
+  ctx.fillText('cleared (14-17)',TX(20),TY(13.6));
+  ctx.fillText('tables 1-13',TX(20),TY(65));
+  ctx.fillText('Ballroom',TX(20),TY(96));
+  ctx.fillText('Terrace',TX(64),TY(33.5));
+  ctx.save();ctx.fillStyle='#b3a892';ctx.font=(9*dpr)+'px Inter,sans-serif';
+  ctx.fillText('door',TX(41),TY(24));ctx.restore();
+}
+function drawDots(){
+  for(const d of dots){
+    const cx=TX(d.x),cy=TY(d.y);
+    let col='#8aa296',rad=crowdRad;
+    if(d.kind==='lead'){col='#d8592e';rad=hiRad;} else if(d.kind==='bg'){col='#7f77dd';rad=hiRad;}
+    ctx.beginPath();ctx.arc(cx,cy,TS(rad/6),0,6.2832);ctx.fillStyle=col;ctx.fill();
+    if(d.kind!=='crowd'){ctx.lineWidth=1.2*dpr;ctx.strokeStyle='rgba(255,255,255,.75)';ctx.stroke();}
+  }
+}
+
+// ---------- loop ----------
+let g=0, playing=false, total=90, last=0, animClock=0, spin=0;
+const SMOOTH=0.16, RINGSPIN=0.35;   // RINGSPIN rad/s: the resolved rings keep revolving (CW, continuing the spiral) instead of freezing
+function setUI(){
+  if(g<=0){ document.getElementById('figNum').textContent='1.';
+    document.getElementById('figName').textContent='Line up';
+    document.getElementById('figRoom').textContent='Terrace'; }
+  else { const{i}=phaseAt(g); const ph=PHASES[i];
+    document.getElementById('figNum').textContent=ph.fig+'.';
+    document.getElementById('figName').textContent=ph.n;
+    document.getElementById('figRoom').textContent=ph.room; }
+  const mt=g*510,mm=Math.floor(mt/60),ss=Math.floor(mt%60);
+  document.getElementById('clk').textContent='march time '+mm+':'+String(ss).padStart(2,'0')+' / 8:30';
+  document.getElementById('scrub').value=Math.round(g*1000);
+}
+function frame(ts){
+  if(!last)last=ts; const dt=Math.min(0.05,(ts-last)/1000); last=ts; animClock+=dt;
+  if(playing){ g+=dt/total; if(g>=1){g=1;playing=false;document.getElementById('play').textContent='\u25B6 Play';} }
+  spin = (g>=gSp_end) ? spin+RINGSPIN*dt : 0;             // the formation keeps revolving through the resolve and onward; never settles to a freeze
+  for(const d of dots){ const t=posFor(g,d,animClock); d.x+=(t.x-d.x)*SMOOTH; d.y+=(t.y-d.y)*SMOOTH; }
+  drawBg();drawDots();setUI();
+  requestAnimationFrame(frame);
+}
+function seed(){for(const d of dots){const t=posFor(g,d,animClock);d.x=t.x;d.y=t.y;}}
+function applyMode(m){
+  if(m==='real'){RANKS=60;GAP=3.0;crowdRad=1.8;hiRad=2.9;}
+  else {RANKS=40;GAP=1.7;crowdRad=2.3;hiRad=3.3;}
+  buildCrowd(); seed();
+}
+
+// ---------- controls ----------
+document.getElementById('play').onclick=function(){if(g>=1)g=0;playing=!playing;this.textContent=playing?'\u275A\u275A Pause':'\u25B6 Play';last=0;};
+document.getElementById('restart').onclick=function(){g=0;playing=false;document.getElementById('play').textContent='\u25B6 Play';seed();};
+document.getElementById('prev').onclick=function(){if(g<=0)return;const{i}=phaseAt(g);if(i===0){g=0;}else{g=PHASES[i-1].g0+0.0005;}};
+document.getElementById('next').onclick=function(){const{i}=phaseAt(g);g=PHASES[Math.min(PHASES.length-1,i+1)].g0+0.0005;};
+document.getElementById('scrub').oninput=function(){g=this.value/1000;playing=false;document.getElementById('play').textContent='\u25B6 Play';};
+document.querySelectorAll('#speed button').forEach(b=>b.onclick=function(){
+  document.querySelectorAll('#speed button').forEach(x=>x.classList.remove('on'));
+  this.classList.add('on'); total=this.dataset.mode==='real'?510:90; last=0;});
+document.querySelectorAll('#crowd button').forEach(b=>b.onclick=function(){
+  document.querySelectorAll('#crowd button').forEach(x=>x.classList.remove('on'));
+  this.classList.add('on'); applyMode(this.dataset.m);});
+window.addEventListener('resize',resize);
+resize(); seed(); requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>
