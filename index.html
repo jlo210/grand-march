@@ -56,6 +56,10 @@
   <div class="stage"><canvas id="cv"></canvas></div>
 
   <div class="controls">
+    <div class="seg" id="variant">
+      <button data-v="1" class="on">Option 1</button>
+      <button data-v="2">Option 2</button>
+    </div>
     <button class="primary" id="play">▶ Play</button>
     <button id="restart">↺ Restart</button>
     <button id="prev">‹ Figure</button>
@@ -76,7 +80,7 @@
     <span><i class="dot" style="background:#7f77dd"></i> Sophia &amp; Isaac</span>
     <span><i class="dot" style="background:#8aa296"></i> Guests</span>
   </div>
-  <div class="note">To scale: the Ballroom stands upright (41 ft &times; 100 ft) with the 14&ndash;17 corner cleared; the Terrace docks against that cleared end, sharing one wall with a door where table 14 sat. Six figures, alternating rooms: <b>1</b> line up along the Terrace walls, <b>2</b> promenade &amp; gather in the Ballroom (small steps, let the files bunch until the Terrace clears), <b>3</b> separate &amp; rejoin in the Terrace (leads and follows serpentine in opposite columns, then re-pair), <b>4</b> promenade back &amp; gather again, <b>5</b> the Arbor March (couples freeze into an oval of arches, then dissolve from the rear and walk the tunnel out), <b>6</b> spiral into the rings and seat Sophia &amp; Isaac at the centre. <b>Realistic</b> is ~120 people at ~3 ft spacing; <b>Legible</b> is a looser ~80. Scrub the bar or step figure by figure.</div>
+  <div class="note">To scale: the Ballroom stands upright (41 ft &times; 100 ft) with the 14&ndash;17 corner cleared; the Terrace docks against that cleared end, sharing one wall with a door where table 14 sat. Six figures, alternating rooms: <b>1</b> line up along the Terrace walls, <b>2</b> promenade &amp; gather in the Ballroom (small steps, let the files bunch until the Terrace clears), <b>3</b> separate &amp; rejoin in the Terrace (leads and follows serpentine in opposite columns, then re-pair), <b>4</b> promenade back &amp; gather again, <b>5</b> the Arbor March (couples freeze into an oval of arches, then dissolve from the rear and walk the tunnel out), <b>6</b> spiral into the rings and seat Sophia &amp; Isaac at the centre. <b>Option&nbsp;1 / Option&nbsp;2</b> swaps only figure 4: Option 1 promenades back and gathers in the Ballroom; Option 2 is the snail, where couples join hands into one single-file line that winds into the centre of the Ballroom floor, U-turns, and unwinds straight back out the door, re-pairing as they reach it and marching on to the Arbor (no separate gather first). <b>Realistic</b> is ~120 people at ~3 ft spacing; <b>Legible</b> is a looser ~80. Scrub the bar or step figure by figure.</div>
 </div>
 
 <script>
@@ -119,6 +123,62 @@ function walkA(gd,side){gd=Math.max(0,Math.min(LA,gd));
   return offset(lap.at(gd-Lq-Lg-Ls),side,HALF);
 }
 
+// ========== SNAIL (figure 4, Option 2): single-file feed-through serpentine in the Ballroom cleared floor ==========
+// Option 2 = Option 1 with figure 4 swapped. Figures 1-3 are identical (line up, gather, separate & rejoin).
+// Figure 4 winds the joined-hands single-file line into the Ballroom and unwinds it straight onto the arbor feed (no rows gather).
+const SNS=[20,27.5], SNRX=16, SNRY=11, SNTURN=1.75, SNUMIN=0.40, SNA0=0.05, SNTH=4.5;   // centred on the finale's spot, mouth toward the door
+const snail=(function(){
+  const pitch=(1-SNUMIN)/SNTURN, half=pitch/2, N=Math.round(SNTURN*60);
+  const inPts=[], outPts=[];
+  for(let i=0;i<=N;i++){const w=SNTURN*i/N; inPts.push([SNA0-w*2*Math.PI, 1-pitch*w]);}            // inward, CW
+  for(let i=N;i>=0;i--){const w=SNTURN*i/N, u=(1-pitch*w)-half; if(u>0.03) outPts.push([SNA0-w*2*Math.PI, u]);} // outward, half a coil inside
+  const D=[44,29], pts=[[D[0],D[1]]], o0=inPts[0];
+  pts.push([D[0]*0.4+(SNS[0]+SNRX*o0[1]*Math.cos(o0[0]))*0.6, D[1]*0.4+(SNS[1]+SNRY*o0[1]*Math.sin(o0[0]))*0.6]); // door -> mouth
+  for(const[a,u]of inPts) pts.push([SNS[0]+SNRX*u*Math.cos(a), SNS[1]+SNRY*u*Math.sin(a)]);
+  const ae=inPts[inPts.length-1][0];
+  for(let i=1;i<6;i++){const t=i/6, a=ae-Math.PI*0.5*t, u=SNUMIN+((SNUMIN-half)-SNUMIN)*t; pts.push([SNS[0]+SNRX*u*Math.cos(a), SNS[1]+SNRY*u*Math.sin(a)]);} // U-turn
+  for(const[a,u]of outPts) pts.push([SNS[0]+SNRX*u*Math.cos(a), SNS[1]+SNRY*u*Math.sin(a)]);
+  const lp=pts[pts.length-1]; pts.push([lp[0]*0.6+D[0]*0.4, lp[1]*0.6+D[1]*0.4]); pts.push([D[0],D[1]]);  // mouth -> door
+  return P(pts);
+})();
+const Lsn=snail.len;
+const LCB=lap.cum[2];                   // figure-4 cross-back: far-right Terrace rejoin -> door (the lap's lead-in)
+const LA2=Lq+Lg+Ls+LCB+Lsn;             // Option-2 route A: queue + gather + separate&rejoin + cross-back + snail
+function spSnail(){return Math.min(GAP,(Ls-SPLITARC)/(RANKS+4));}   // pack on the serpentine / cross-back / snail (also the arbor feed pack)
+function coupleArcA2(r,Dw){             // couples walk back from the lead along Option-2 route A
+  let a=Dw;
+  const spLU=Math.min(GAP,Lq/(RANKS+0.5));
+  const bunch=Math.min(GAP*0.83,Math.max(1.6,(Lg-42)/RANKS));
+  const sp=spSnail();
+  for(let k=0;k<r;k++){
+    let gap;
+    if(a>Lq+Lg+Ls) gap=sp;                              // cross-back + snail, single file pack
+    else if(a>Lq+Lg+SPLITARC) gap=sp;                   // serpentine, single file
+    else if(a>Lq+Lg) gap=GAP;                           // split entry, 2-abreast
+    else if(a>Lq) gap=bunch;                            // gather
+    else gap=spLU;                                      // line-up
+    a-=gap; if(a<=0){a=0;break;}
+  }
+  return a;
+}
+function placeA2(ca,side){             // place a dot from its couple-arc along Option-2 route A
+  if(ca<=Lq) return offset(queue.at(ca),side,HALF*0.8);
+  if(ca<=Lq+Lg) return offset(gather.at(ca-Lq),side,HALF);
+  if(ca<=Lq+Lg+Ls){const arc=ca-Lq-Lg, sp=(side<0?splitL:splitR);
+    return offset(sp.at(arc),side,arc<SPLITARC?HALF:0);}              // separate & rejoin = Option 1's figure 3
+  if(ca<=Lq+Lg+Ls+LCB) return offset(lap.at(ca-Lq-Lg-Ls),side,HALF); // cross-back from the rejoin to the door
+  const s=ca-Lq-Lg-Ls-LCB;                                            // the Ballroom snail, single file, partners staggered along the line
+  let blend=1; if(s<SNTH) blend=s/SNTH; else if(s>Lsn-SNTH) blend=(Lsn-s)/SNTH;
+  const longi=(side<0?spSnail()/4:-spSnail()/4)*blend;
+  const base=snail.at(Math.max(0,Math.min(Lsn,s+longi)));
+  return offset(base,side,HALF*(1-blend));
+}
+function posA2(g,d){
+  if(g<=0) return placeA2(coupleArcA2(d.r,Lq),d.side);
+  const Dw=Lq+(g/gA_end)*(LA2-Lq);
+  return placeA2(coupleArcA2(d.r,Dw),d.side);
+}
+
 // ========== ARBOR (figure 5) : per-couple state machine ==========
 const O=[64,18], ORX=20, ORY=13, ARCH=1.7, AGAP=0.55, TH0=Math.PI;
 function ovalPt(a,ro){return {x:O[0]+(ORX+ro)*Math.cos(a), y:O[1]+(ORY+ro)*Math.sin(a)};}
@@ -151,7 +211,16 @@ function arbor(g,d){                                      // figures 5 AND 6: bu
   let ang=TH0+(2*Fzr-i+1)*dth;                             // marching: one continuous pace from the door, through the mouth, onto the oval
   if(ang>=TH0){ const sa=d.side>0?ang-0.045:ang; return ovalPt(sa,0); }  // single file on the oval
   const back=(TH0-ang)/dth;
-  return offset(arborIn.at(Math.min(arborIn.len,back*sp)),-d.side,HALF);  // queued along figure 4's lap, back into the Ballroom
+  if(VARIANT===2){                                       // Option 2: waiting couples are still on the Ballroom snail, re-pairing at the door
+    const fa=back*sp;
+    if(fa<=DOORARC) return offset(arborIn.at(fa),-d.side,HALF);          // door -> oval approach, shared with Option 1
+    const s=Math.max(0,Lsn-(fa-DOORARC));                                // arc along the snail, measured from the exit backwards
+    let blend=1; if(s>Lsn-SNTH) blend=(Lsn-s)/SNTH;                      // re-pair throat at the exit / door
+    const longi=(d.side<0?sp/4:-sp/4)*blend;
+    const base=snail.at(Math.max(0,Math.min(Lsn,s+longi)));
+    return offset(base,d.side,HALF*(1-blend));
+  }
+  return offset(arborIn.at(Math.min(arborIn.len,back*sp)),-d.side,HALF);  // Option 1: queued along figure 4's lap, back into the Ballroom
 }
 
 // ========== SPIRAL + RINGS (figure 6) ==========
@@ -220,18 +289,26 @@ function buildCrowd(){dots.length=0;
 }
 
 // ---------- phases ----------
-const PHASES=[
-  {fig:2,n:'Promenade & gather',room:'Ballroom',w:Math.round(Lg)},
-  {fig:3,n:'Separate & rejoin',room:'Terrace',w:Math.round(Ls)},
-  {fig:4,n:'Promenade & gather',room:'Ballroom',w:Math.round(Ll)},
-  {fig:5,n:'Arbor March',room:'Terrace',w:330},
-  {fig:6,n:'Spiral',room:'Ballroom',w:Math.round(Lsp)},
-  {fig:6,n:'Resolve into rings',room:'Ballroom',w:110},
-];
-const totW=PHASES.reduce((a,p)=>a+p.w,0);
-let acc=0; PHASES.forEach(p=>{p.g0=acc/totW;acc+=p.w;p.g1=acc/totW;});
-const gA_end=PHASES[2].g1, gAr_end=PHASES[3].g1, gSp_end=PHASES[4].g1;
-const gColl=gA_end+QREL*(gAr_end-gA_end);                  // collapse begins ~QREL into figure 5 and runs through the end of figure 6
+let VARIANT=1;
+let PHASES, totW, gA_end, gAr_end, gSp_end, gColl;
+function buildPhases(){
+  const f4 = VARIANT===2
+    ? {fig:4,n:'Snail',room:'Ballroom',w:Math.round(LCB+Lsn)}
+    : {fig:4,n:'Promenade & gather',room:'Ballroom',w:Math.round(Ll)};
+  PHASES=[
+    {fig:2,n:'Promenade & gather',room:'Ballroom',w:Math.round(Lg)},
+    {fig:3,n:'Separate & rejoin',room:'Terrace',w:Math.round(Ls)},
+    f4,
+    {fig:5,n:'Arbor March',room:'Terrace',w:330},
+    {fig:6,n:'Spiral',room:'Ballroom',w:Math.round(Lsp)},
+    {fig:6,n:'Resolve into rings',room:'Ballroom',w:110},
+  ];
+  totW=PHASES.reduce((a,p)=>a+p.w,0);
+  let acc=0; PHASES.forEach(p=>{p.g0=acc/totW;acc+=p.w;p.g1=acc/totW;});
+  gA_end=PHASES[2].g1; gAr_end=PHASES[3].g1; gSp_end=PHASES[4].g1;
+  gColl=gA_end+QREL*(gAr_end-gA_end);                       // collapse begins ~QREL into figure 5 and runs through the end of figure 6
+}
+buildPhases();
 function phaseAt(g){for(let i=0;i<PHASES.length;i++){if(g<=PHASES[i].g1||i===PHASES.length-1)return{i,p:(g-PHASES[i].g0)/(PHASES[i].g1-PHASES[i].g0)};}}
 
 buildCrowd();
@@ -253,6 +330,7 @@ function rankArcA(r,DwA){                                    // walk back from t
   return a;
 }
 function posFor(g,d,now){
+  if(VARIANT===2 && g<=gA_end) return posA2(g,d);          // Option 2: queue -> gather -> separate&rejoin -> snail
   if(g<=0) return walkA(rankArcA(d.r,Lq),d.side);           // figure 1: couples packed along the three Terrace walls, lead at the door
   if(g<=gA_end){ const Dw=Lq+(g/gA_end)*(LA-Lq); return walkA(rankArcA(d.r,Dw),d.side); }
   if(g<=gSp_end) return arbor(g,d);                         // figures 5 AND 6: one continuous build -> collapse -> coil
@@ -349,6 +427,9 @@ document.querySelectorAll('#speed button').forEach(b=>b.onclick=function(){
 document.querySelectorAll('#crowd button').forEach(b=>b.onclick=function(){
   document.querySelectorAll('#crowd button').forEach(x=>x.classList.remove('on'));
   this.classList.add('on'); applyMode(this.dataset.m);});
+document.querySelectorAll('#variant button').forEach(b=>b.onclick=function(){
+  document.querySelectorAll('#variant button').forEach(x=>x.classList.remove('on'));
+  this.classList.add('on'); VARIANT=+this.dataset.v; buildPhases();});
 window.addEventListener('resize',resize);
 resize(); seed(); requestAnimationFrame(frame);
 })();
